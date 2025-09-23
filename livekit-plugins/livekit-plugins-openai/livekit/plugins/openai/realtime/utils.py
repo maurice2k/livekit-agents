@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 from typing import Any
 
@@ -23,6 +24,39 @@ from openai.types.realtime import (
 from openai.types.realtime.realtime_audio_config_input import NoiseReduction
 
 from ..log import logger
+
+
+class ZeroNotifyCounter:
+    def __init__(self) -> None:
+        self._count = 0
+        self._zero_event = asyncio.Event()
+        self._zero_event.set()
+
+    async def inc(self) -> None:
+        self._count += 1
+        if self._count == 1:
+            self._zero_event.clear()
+
+    async def dec(self) -> None:
+        if self._count > 0:
+            self._count -= 1
+            if self._count == 0:
+                self._zero_event.set()
+
+    async def zero(self) -> None:
+        self._count = 0
+        self._zero_event.set()
+
+    @property
+    def count(self) -> int:
+        return self._count
+
+    async def wait_until_zero(self, timeout: float | None = None) -> None:
+        if timeout is None:
+            await self._zero_event.wait()
+        else:
+            await asyncio.wait_for(self._zero_event.wait(), timeout=timeout)
+
 
 # default values got from a "default" session from their API
 DEFAULT_TURN_DETECTION = realtime.realtime_audio_input_turn_detection.SemanticVad(
